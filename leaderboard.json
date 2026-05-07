@@ -1,0 +1,41 @@
+{
+  "last_updated": "2026-04-25T20:29:53.972618+00:00",
+  "leaderboard": [
+    {
+      "model": "claude-opus-4-7",
+      "run_id": "ea48c337ced6",
+      "started_at": "2026-04-25T20:29:53.972618+00:00",
+      "judge_model": "claude-opus-4-7",
+      "n": 13,
+      "accuracy": 0.7692307692307693,
+      "full": 10,
+      "partial": 0,
+      "wrong": 3,
+      "errors": 0
+    },
+    {
+      "model": "claude-sonnet-4-6",
+      "run_id": "93b98ba80e75",
+      "started_at": "2026-04-25T20:29:26.519306+00:00",
+      "judge_model": "claude-opus-4-7",
+      "n": 13,
+      "accuracy": 0.7692307692307693,
+      "full": 10,
+      "partial": 0,
+      "wrong": 3,
+      "errors": 0
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "run_id": "e43beb260ceb",
+      "started_at": "2026-04-25T20:28:55.815224+00:00",
+      "judge_model": "claude-opus-4-7",
+      "n": 13,
+      "accuracy": 0.38461538461538464,
+      "full": 5,
+      "partial": 0,
+      "wrong": 8,
+      "errors": 0
+    }
+  ]
+}

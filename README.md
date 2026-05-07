@@ -32,6 +32,15 @@ python -m dwarf_bench grade results/<run-file>.jsonl
 python -m dwarf_bench report
 ```
 
+To regenerate the leaderboard JSON consumed by [the website](https://nocount.github.io/dwarf-bench.html):
+
+```bash
+python -m dwarf_bench report --json -o leaderboard.json
+git add leaderboard.json && git commit -m "Update leaderboard" && git push
+```
+
+The site fetches `leaderboard.json` from the `main` branch of this repo at page-load time, so a push is all it takes to publish new numbers.
+
 ## Dataset
 
 Questions live in `data/questions.jsonl`, one JSON object per line:

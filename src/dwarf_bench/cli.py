@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import sys
 from pathlib import Path
 
@@ -43,6 +44,17 @@ def main(argv: list[str] | None = None) -> int:
 
     p_report = sub.add_parser("report", help="Summarize graded runs")
     p_report.add_argument("--results-dir", default=DEFAULT_RESULTS_DIR)
+    p_report.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit a leaderboard JSON (one entry per model: latest fully-graded run)",
+    )
+    p_report.add_argument(
+        "-o",
+        "--output",
+        default=None,
+        help="With --json, write to this path instead of stdout. Use '-' for stdout.",
+    )
 
     args = parser.parse_args(argv)
 
@@ -126,17 +138,76 @@ def _cmd_report(args) -> int:
     if not results_dir.exists():
         print(f"No results directory at {results_dir}", file=sys.stderr)
         return 1
-    rows: list[tuple[str, float | None, int]] = []
+
+    leaderboard = _build_leaderboard(results_dir)
+
+    if args.json:
+        last_updated = max((r["started_at"] for r in leaderboard), default=None)
+        payload = {
+            "last_updated": last_updated,
+            "leaderboard": leaderboard,
+        }
+        text = json.dumps(payload, indent=2) + "\n"
+        if args.output and args.output != "-":
+            Path(args.output).write_text(text, encoding="utf-8")
+            print(f"Wrote {args.output}", file=sys.stderr)
+        else:
+            sys.stdout.write(text)
+        return 0
+
+    rows = [
+        (f"{r['model']} ({r['run_id']})", r["accuracy"], r["errors"])
+        for r in leaderboard
+    ]
+    _print_table(rows)
+    return 0
+
+
+def _build_leaderboard(results_dir: Path) -> list[dict]:
+    """One entry per model: its most recent fully-graded run, sorted by accuracy desc."""
+    runs_by_model: dict[str, list[RunArtifact]] = {}
     for path in sorted(results_dir.glob("*.jsonl")):
         try:
             artifact = RunArtifact.load(path)
         except Exception as e:
             print(f"Skipping {path}: {e}", file=sys.stderr)
             continue
+        runs_by_model.setdefault(artifact.model, []).append(artifact)
+
+    leaderboard: list[dict] = []
+    for model, runs in runs_by_model.items():
+        complete = [
+            a for a in runs
+            if any(r.grade is not None for r in a.results)
+            and all(r.grade is not None for r in a.results if r.error is None)
+        ]
+        if not complete:
+            continue
+        artifact = max(complete, key=lambda a: a.started_at)
+        full = sum(1 for r in artifact.results if r.grade and r.grade.score == 1.0)
+        partial = sum(1 for r in artifact.results if r.grade and r.grade.score == 0.5)
+        wrong = sum(1 for r in artifact.results if r.grade and r.grade.score == 0.0)
+        graded = full + partial + wrong
         errors = sum(1 for r in artifact.results if r.error)
-        rows.append((f"{artifact.model} ({artifact.run_id})", artifact.accuracy(), errors))
-    _print_table(rows)
-    return 0
+        judge_model = next(
+            (r.grade.judge_model for r in artifact.results if r.grade is not None),
+            None,
+        )
+        leaderboard.append({
+            "model": artifact.model,
+            "run_id": artifact.run_id,
+            "started_at": artifact.started_at,
+            "judge_model": judge_model,
+            "n": graded,
+            "accuracy": (full + 0.5 * partial) / graded if graded else None,
+            "full": full,
+            "partial": partial,
+            "wrong": wrong,
+            "errors": errors,
+        })
+
+    leaderboard.sort(key=lambda r: (-(r["accuracy"] or 0.0), r["model"]))
+    return leaderboard
 
 
 def _print_table(rows: list[tuple[str, float | None, int]]) -> None:
