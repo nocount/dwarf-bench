@@ -12,16 +12,22 @@ See [`PLAN.md`](PLAN.md) for the full design.
 python -m venv .venv
 .venv/Scripts/activate       # Windows
 # source .venv/bin/activate  # macOS/Linux
-pip install -e ".[dev]"
-cp .env.example .env         # then fill in ANTHROPIC_API_KEY
+pip install -e ".[dev]"           # Anthropic only (default)
+# pip install -e ".[dev,openai]"  # add OpenAI
+# pip install -e ".[dev,gemini]"  # add Gemini
+# pip install -e ".[dev,all]"     # all three
+cp .env.example .env         # then fill in keys for the providers you'll use
 ```
 
 ## Usage
 
-Run + grade one or more models in a single shot:
+Run + grade one or more models in a single shot. Mix providers freely; the
+provider is inferred from the model name (`claude-*` → Anthropic, `gpt-*` /
+`o3-*` / `o4-*` → OpenAI, `gemini-*` → Google). Use `provider:model` as an
+escape hatch (e.g. `openai:my-finetune`).
 
 ```bash
-python -m dwarf_bench bench --models claude-opus-4-7,claude-sonnet-4-6,claude-haiku-4-5-20251001
+python -m dwarf_bench bench --models claude-opus-4-7,gpt-5,gemini-2.5-pro
 ```
 
 Or run and grade separately:

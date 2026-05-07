@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 from dwarf_bench.dataset import load_questions
 from dwarf_bench.judge import DEFAULT_JUDGE_MODEL, grade_artifact
-from dwarf_bench.providers import AnthropicProvider
+from dwarf_bench.providers import provider_for
 from dwarf_bench.results import RunArtifact
 from dwarf_bench.runner import run_benchmark
 
@@ -71,11 +71,11 @@ def main(argv: list[str] | None = None) -> int:
 
 async def _cmd_run(args) -> int:
     questions = load_questions(args.dataset)
-    provider = AnthropicProvider()
-    print(f"Running {len(questions)} questions on {args.model}...")
+    provider, bare_model = provider_for(args.model)
+    print(f"Running {len(questions)} questions on {bare_model} ({provider.name})...")
     artifact = await run_benchmark(
         provider=provider,
-        model=args.model,
+        model=bare_model,
         questions=questions,
         concurrency=args.concurrency,
     )
@@ -87,12 +87,12 @@ async def _cmd_run(args) -> int:
 
 async def _cmd_grade(args) -> int:
     artifact = RunArtifact.load(args.run_file)
-    judge = AnthropicProvider()
-    print(f"Grading {args.run_file} with {args.judge_model}...")
+    judge, judge_bare = provider_for(args.judge_model)
+    print(f"Grading {args.run_file} with {judge_bare} ({judge.name})...")
     await grade_artifact(
         artifact,
         judge=judge,
-        judge_model=args.judge_model,
+        judge_model=judge_bare,
         concurrency=args.concurrency,
     )
     artifact.save(Path(args.run_file).parent)
@@ -103,24 +103,24 @@ async def _cmd_grade(args) -> int:
 
 async def _cmd_bench(args) -> int:
     questions = load_questions(args.dataset)
-    provider = AnthropicProvider()
-    judge = AnthropicProvider()
+    judge, judge_bare = provider_for(args.judge_model)
     models = [m.strip() for m in args.models.split(",") if m.strip()]
     rows: list[tuple[str, float | None, int]] = []
     for model in models:
-        print(f"\n=== {model} ===")
+        provider, bare_model = provider_for(model)
+        print(f"\n=== {bare_model} ({provider.name}) ===")
         print(f"  Running {len(questions)} questions...")
         artifact = await run_benchmark(
             provider=provider,
-            model=model,
+            model=bare_model,
             questions=questions,
             concurrency=args.concurrency,
         )
-        print(f"  Grading with {args.judge_model}...")
+        print(f"  Grading with {judge_bare} ({judge.name})...")
         await grade_artifact(
             artifact,
             judge=judge,
-            judge_model=args.judge_model,
+            judge_model=judge_bare,
             concurrency=args.concurrency,
         )
         path = artifact.save(args.results_dir)
@@ -128,7 +128,7 @@ async def _cmd_bench(args) -> int:
         acc = artifact.accuracy()
         print(f"  Saved {path}")
         print(f"  Accuracy: {acc:.2%}" if acc is not None else "  No grades.")
-        rows.append((model, acc, errors))
+        rows.append((bare_model, acc, errors))
     _print_table(rows)
     return 0
 
