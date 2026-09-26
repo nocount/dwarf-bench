@@ -55,3 +55,22 @@ async def test_judge_skips_errored_results():
     assert full.grade is not None and full.grade.score == 1.0
     # The empty answer is excluded from accuracy rather than counted as 0.
     assert artifact.accuracy() == 1.0
+
+
+class FailingJudge:
+    name = "fake"
+
+    async def generate(self, *, model, system, user, max_tokens=1024):
+        return ModelResponse(text="", model=model, input_tokens=1, output_tokens=0, raw={})
+
+
+async def test_judge_failure_leaves_answer_ungraded():
+    provider = FakeProvider({"q?": "an answer"})
+    artifact = await run_benchmark(
+        provider=provider, model="m", questions=[_q("a", "q?")]
+    )
+    await grade_artifact(artifact, judge=FailingJudge(), judge_model="judge")
+    (result,) = artifact.results
+    # Not a silent 0.0: stays ungraded so a later `grade` run retries it.
+    assert result.grade is None
+    assert artifact.accuracy() is None

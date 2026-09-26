@@ -34,6 +34,11 @@ def main(argv: list[str] | None = None) -> int:
     p_grade.add_argument("run_file")
     p_grade.add_argument("--judge-model", default=DEFAULT_JUDGE_MODEL)
     p_grade.add_argument("--concurrency", type=int, default=5)
+    p_grade.add_argument(
+        "--regrade",
+        action="store_true",
+        help="Discard existing grades and re-judge every answer (e.g. with a new judge)",
+    )
 
     p_bench = sub.add_parser("bench", help="Run + grade one or more models")
     p_bench.add_argument("--models", required=True, help="Comma-separated list")
@@ -87,6 +92,9 @@ async def _cmd_run(args) -> int:
 
 async def _cmd_grade(args) -> int:
     artifact = RunArtifact.load(args.run_file)
+    if args.regrade:
+        for r in artifact.results:
+            r.grade = None
     judge, judge_bare = provider_for(args.judge_model)
     print(f"Grading {args.run_file} with {judge_bare} ({judge.name})...")
     await grade_artifact(
@@ -96,6 +104,7 @@ async def _cmd_grade(args) -> int:
         concurrency=args.concurrency,
     )
     artifact.save(Path(args.run_file).parent)
+    _warn_ungraded(artifact, args.run_file)
     acc = artifact.accuracy()
     print(f"Accuracy: {acc:.2%}" if acc is not None else "No grades produced.")
     return 0
@@ -127,10 +136,22 @@ async def _cmd_bench(args) -> int:
         errors = sum(1 for r in artifact.results if r.error)
         acc = artifact.accuracy()
         print(f"  Saved {path}")
+        _warn_ungraded(artifact, path)
         print(f"  Accuracy: {acc:.2%}" if acc is not None else "  No grades.")
         rows.append((bare_model, acc, errors))
     _print_table(rows)
     return 0
+
+
+def _warn_ungraded(artifact: RunArtifact, path) -> None:
+    """Flag answers the judge failed on; `report` skips runs until they're graded."""
+    ungraded = sum(1 for r in artifact.results if r.error is None and r.grade is None)
+    if ungraded:
+        print(
+            f"  {ungraded} answer(s) left ungraded by judge failures; "
+            f"re-run: dwarf-bench grade {path}",
+            file=sys.stderr,
+        )
 
 
 def _cmd_report(args) -> int:

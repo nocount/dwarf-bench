@@ -8,11 +8,17 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import sys
 
 from dwarf_bench.providers.base import Provider
 from dwarf_bench.results import Grade, RunArtifact, RunResult
 
 DEFAULT_JUDGE_MODEL = "claude-opus-4-7"
+
+# Room for judges that always think before answering (e.g. claude-opus-5-5,
+# where thinking can't be disabled and counts against max_tokens). At 300 its
+# verdicts came back empty or truncated mid-JSON.
+JUDGE_MAX_TOKENS = 4096
 
 JUDGE_SYSTEM = (
     "You are an impartial grader for a trivia benchmark. You compare a model's "
@@ -60,14 +66,15 @@ async def grade_artifact(
                     model=judge_model,
                     system=JUDGE_SYSTEM,
                     user=user,
-                    max_tokens=300,
+                    max_tokens=JUDGE_MAX_TOKENS,
                 )
                 r.grade = _parse_grade(resp.text, judge_model)
             except Exception as e:
-                r.grade = Grade(
-                    score=0.0,
-                    reasoning=f"judge error: {type(e).__name__}: {e}",
-                    judge_model=judge_model,
+                # Leave it ungraded rather than scoring 0: a judge failure says
+                # nothing about the answer, and re-running `grade` retries it.
+                print(
+                    f"  judge failed on {r.question.id}: {type(e).__name__}: {e}",
+                    file=sys.stderr,
                 )
 
     await asyncio.gather(*(grade_one(r) for r in artifact.results))
