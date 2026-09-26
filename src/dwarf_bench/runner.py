@@ -17,6 +17,10 @@ SYSTEM_PROMPT = (
     "exactly \"I don't know\" rather than guessing."
 )
 
+# Generous so reasoning models (gpt-5.x, gemini-2.5-pro) have room for hidden
+# thinking before the answer; non-reasoning models stop well short of it.
+ANSWER_MAX_TOKENS = 8192
+
 
 async def run_benchmark(
     *,
@@ -40,10 +44,19 @@ async def run_benchmark(
                     model=model,
                     system=system_prompt,
                     user=q.question,
+                    max_tokens=ANSWER_MAX_TOKENS,
                 )
-                return RunResult(question=q, response=resp)
             except Exception as e:
                 return RunResult(question=q, error=f"{type(e).__name__}: {e}")
+            if not resp.text:
+                # Usually a reasoning model spending its whole budget thinking.
+                # Record as an error so it's excluded from accuracy, not graded 0.
+                return RunResult(
+                    question=q,
+                    response=resp,
+                    error=f"empty response ({resp.output_tokens} output tokens)",
+                )
+            return RunResult(question=q, response=resp)
 
     artifact.results = await asyncio.gather(*(one(q) for q in questions))
     return artifact

@@ -47,7 +47,7 @@ async def grade_artifact(
     sem = asyncio.Semaphore(concurrency)
 
     async def grade_one(r: RunResult) -> None:
-        if r.grade is not None or r.response is None:
+        if r.grade is not None or r.response is None or r.error is not None:
             return
         async with sem:
             try:
